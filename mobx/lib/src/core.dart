@@ -4,9 +4,12 @@ import 'dart:collection';
 import 'package:meta/meta.dart';
 
 import '../mobx.dart';
+import 'api/async.dart';
 import 'utils.dart';
 
 part 'core/action.dart';
+
+part 'core/async_computed.dart';
 
 part 'core/atom.dart';
 
@@ -17,6 +20,8 @@ part 'core/context.dart';
 part 'core/context_extensions.dart';
 
 part 'core/derivation.dart';
+
+part 'core/mutable_computed.dart';
 
 part 'core/notification_handlers.dart';
 
