@@ -192,7 +192,7 @@ sealed class AsyncValue<T> {
   /// This changes the default behavior of [when] and sets the [isReloading]/
   /// [isRefreshing] flags accordingly.
   AsyncValue<T> copyWithPrevious(
-    AsyncValue<T> previous, {
+    AsyncValue<T>? previous, {
     bool isRefresh = true,
   });
 
@@ -296,7 +296,7 @@ final class AsyncData<T> extends AsyncValue<T> {
 
   @override
   AsyncData<T> copyWithPrevious(
-    AsyncValue<T> previous, {
+    AsyncValue<T>? previous, {
     bool isRefresh = true,
   }) {
     return this;
@@ -349,9 +349,11 @@ final class AsyncLoading<T> extends AsyncValue<T> {
 
   @override
   AsyncValue<T> copyWithPrevious(
-    AsyncValue<T> previous, {
+    AsyncValue<T>? previous, {
     bool isRefresh = true,
   }) {
+    if(previous == null) return this;
+
     if (isRefresh) {
       return previous.map(
         data: (d) => AsyncData._(
@@ -446,9 +448,11 @@ final class AsyncError<T> extends AsyncValue<T> {
 
   @override
   AsyncError<T> copyWithPrevious(
-    AsyncValue<T> previous, {
+    AsyncValue<T>? previous, {
     bool isRefresh = true,
   }) {
+    if(previous == null) return this;
+
     return AsyncError._(
       error,
       stackTrace: stackTrace,

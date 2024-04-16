@@ -55,8 +55,24 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
 
       sync = false;
 
-      return syncValue ?? AsyncLoading();
+      return syncValue ?? AsyncLoading<T>().copyWithPrevious(_value, isRefresh: false);
     };
+  }
+
+  @override
+  set value(AsyncValue<T> newValue) {
+    if (_isComputing) {
+      throw MobXCyclicReactionException(
+          'Value mutation during computation not allowed. $name: $_fn');
+    }
+    final previous = _value;
+    if (!_isEqual(_value, newValue)) {
+      _value = newValue.copyWithPrevious(previous, isRefresh: false);
+      _context
+        ..startBatch()
+        ..propagateChanged(this)
+        ..endBatch();
+    }
   }
 
   @override
@@ -79,21 +95,12 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
   }
 
   FutureOr<R> run<R>(FutureOr<R> Function() body) {
-    try {
-      final resultFuture = _zone.run(body);
-      final result = resultFuture;
-      return result;
-    } finally {
-      // @katis:
-      // Delay completion until next microtask completion.
-      // Needed to make sure that all mobx state changes are
-      // applied after `await run()` completes, not sure why.
-      //  await Future.microtask(_noOp);
+    final futureOr = _zone.run(body);
+    if (futureOr is! Future<R>) {
+      _asyncComputing = false;
+      return futureOr;
     }
-  }
-
-  void _noOp() {
-    _asyncComputing = false;
+    return futureOr.whenComplete(() => _asyncComputing = false);
   }
 
   R _run<R>(Zone self, ZoneDelegate parent, Zone zone, R Function() f) {
