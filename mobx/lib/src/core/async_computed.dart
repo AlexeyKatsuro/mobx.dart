@@ -1,6 +1,6 @@
 part of '../core.dart';
 
-class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
+class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivation {
   factory AsyncComputed(
     FutureOr<T> Function() fn, {
     String? name,
@@ -27,17 +27,22 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
     _fn = () {
       AsyncValue<T>? syncValue;
       final FutureOr<T> futureOr;
+      final disposer = _Disposer();
       try {
-        futureOr = run(_asyncFn);
+        futureOr = _runInZone(_asyncFn, disposer: disposer);
       } catch (error, stackTrace) {
+        _state = AsyncDerivationState.upToDate;
         return AsyncValue.error(error, stackTrace);
       }
       if (futureOr is! Future<T>) {
+        _state = AsyncDerivationState.upToDate;
         return AsyncData(futureOr);
       }
       bool sync = true;
       futureOr.then(
         (data) {
+          if (disposer.isDisposed) return;
+
           if (sync) {
             syncValue = AsyncData(data);
           } else {
@@ -45,13 +50,18 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
           }
         },
         onError: (Object error, StackTrace stackTrace) {
+          if (disposer.isDisposed) return;
+
           if (sync) {
             syncValue = AsyncError<T>(error, stackTrace);
           } else {
             value = AsyncError<T>(error, stackTrace);
           }
         },
-      );
+      ).whenComplete(() {
+        if (disposer.isDisposed) return;
+        _state = AsyncDerivationState.upToDate;
+      });
 
       sync = false;
 
@@ -82,62 +92,56 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
   }
 
   final FutureOr<T> Function() _asyncFn;
-  Zone? _zoneField;
+  Zone? _prevZone;
 
-  bool _asyncComputing = false;
-
-  Zone get _zone {
-    if (_zoneField == null) {
-      final spec = ZoneSpecification(run: _run, runUnary: _runUnary);
-      _zoneField = Zone.current.fork(specification: spec);
-    }
-    return _zoneField!;
+  Zone _createZone(_Disposer disposer) {
+    final spec = ZoneSpecification(run: _run, runUnary: _runUnary);
+    return Zone.current.fork(specification: spec, zoneValues: {
+      #disposer: disposer,
+    });
   }
 
-  FutureOr<R> run<R>(FutureOr<R> Function() body) {
-    final futureOr = _zone.run(body);
-    if (futureOr is! Future<R>) {
-      _asyncComputing = false;
-      return futureOr;
+  FutureOr<R> _runInZone<R>(FutureOr<R> Function() body, {required _Disposer disposer}) {
+    final prevZone = _prevZone;
+
+    if (prevZone != null) {
+      prevZone.disposer.dispose();
+      _prevZone = null;
     }
-    return futureOr.whenComplete(() => _asyncComputing = false);
+    final zone = _createZone(disposer);
+    _prevZone = zone;
+    return zone.run(body);
   }
 
   R _run<R>(Zone self, ZoneDelegate parent, Zone zone, R Function() f) {
-    if (context._state.trackingDerivation == this) {
+    if (self.disposer.isDisposed) {
       return parent.run(zone, f);
     }
-    _context.startBatch();
-    final prevDerivation = context._startTracking(this);
-    if (_asyncComputing) {
-      _newObservables = {..._observables};
-    } else {
-      _asyncComputing = true;
-    }
-    try {
-      final result = parent.run(zone, f);
-      return result;
-    } finally {
-      context._endTracking(this, prevDerivation);
-      _context.endBatch();
-    }
+    return _tack(() => parent.run(zone, f));
   }
 
   // Will be invoked for a catch clause that has a single argument: exception or
   // when a result is produced
   R _runUnary<R, A>(Zone self, ZoneDelegate parent, Zone zone, R Function(A a) f, A a) {
-    if (context._state.trackingDerivation == this) {
+    if (self.disposer.isDisposed) {
       return parent.runUnary(zone, f, a);
+    }
+    return _tack(() => parent.runUnary(zone, f, a));
+  }
+
+  R _tack<R>(R Function() fn) {
+    if (context._state.trackingDerivation == this) {
+      return fn();
     }
     _context.startBatch();
     final prevDerivation = context._startTracking(this);
-    if (_asyncComputing) {
+    if (_state == AsyncDerivationState.computing) {
       _newObservables = {..._observables};
     } else {
-      _asyncComputing = true;
+      _state = AsyncDerivationState.computing;
     }
     try {
-      final result = parent.runUnary(zone, f, a);
+      final result = fn();
       return result;
     } finally {
       context._endTracking(this, prevDerivation);
@@ -147,4 +151,25 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> {
 
   @override
   String toString() => 'AsyncComputed<$T>(name: $name, identity: ${identityHashCode(this)})';
+}
+
+mixin AsyncDerivation {
+  AsyncDerivationState _state = AsyncDerivationState.notTracked;
+}
+
+enum AsyncDerivationState {
+  notTracked,
+  computing,
+  upToDate;
+}
+
+extension on Zone {
+  _Disposer get disposer {
+    return this[#disposer] as _Disposer;
+  }
+}
+
+class _Disposer {
+  void dispose() => isDisposed = true;
+  bool isDisposed = false;
 }

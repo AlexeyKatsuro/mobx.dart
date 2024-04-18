@@ -372,48 +372,112 @@ void main() {
     });
 
     test(
-        'after recompute, should stop tracking dependencies that began to be observed after the async gap',
-        () async {
-      int observationCount = 0;
-      int computationCount = 0;
-      final x = Observable(1);
-      final y = Observable(2);
-      final z = Observable(3);
-      final computed = AsyncComputed(() async {
-        computationCount++;
-        final xValue = x.value;
-        await sleep(100);
-        final yValue = y.value;
-        await sleep(100);
-        final zValue = z.value;
-        return xValue + yValue + zValue;
-      });
-
-      fakeAsync((async) {
-        final dispose = computed.observe((change) {
-          observationCount++;
+      'after recompute, should stop tracking dependencies that began to be observed after the async gap',
+      () async {
+        int observationCount = 0;
+        int computationCount = 0;
+        final x = Observable(1);
+        final y = Observable(2);
+        final z = Observable(3);
+        final computed = AsyncComputed(() async {
+          computationCount++;
+          final xValue = x.value;
+          await sleep(100);
+          final yValue = y.value;
+          await sleep(100);
+          final zValue = z.value;
+          return xValue + yValue + zValue;
         });
 
-        async.elapse(Duration(milliseconds: 200));
-        expect(x.isBeingObserved, isTrue);
-        expect(y.isBeingObserved, isTrue);
-        expect(z.isBeingObserved, isTrue);
-        expect(observationCount, equals(2)); // loading + data
-        expect(computationCount, equals(1));
+        fakeAsync((async) {
+          final dispose = computed.observe((change) {
+            observationCount++;
+          });
 
-        // recompute
-        x.value = x.value + 1;
-        expect(computationCount, equals(2));
-        expect(x.isBeingObserved, isTrue);
-        expect(y.isBeingObserved, isFalse);
-        expect(z.isBeingObserved, isFalse);
-        async.elapse(Duration(milliseconds: 200));
-        // Observe again
-        expect(x.isBeingObserved, isTrue);
-        expect(y.isBeingObserved, isTrue);
-        expect(z.isBeingObserved, isTrue);
-        dispose();
-      });
-    });
+          async.elapse(Duration(milliseconds: 200));
+          expect(x.isBeingObserved, isTrue);
+          expect(y.isBeingObserved, isTrue);
+          expect(z.isBeingObserved, isTrue);
+          expect(observationCount, equals(2)); // loading + data
+          expect(computationCount, equals(1));
+
+          x.value = x.value + 1; // recompute
+          expect(computationCount, equals(2));
+          z.value = z.value + 1; // shouldn't trigger new computation
+          expect(computationCount, equals(2));
+          expect(x.isBeingObserved, isTrue);
+          expect(y.isBeingObserved, isFalse);
+          expect(z.isBeingObserved, isFalse);
+          async.elapse(Duration(milliseconds: 200));
+          // Observe again
+          expect(x.isBeingObserved, isTrue);
+          expect(y.isBeingObserved, isTrue);
+          expect(z.isBeingObserved, isTrue);
+          dispose();
+        });
+      },
+    );
+
+    test(
+      "after recompute during async pause, should ignore invocation and don't track any observables",
+      () async {
+        int observationCount = 0;
+        int computationCount = 0;
+        final x = Observable(1);
+        final y = Observable(2);
+        final z = Observable(4);
+
+        var yReaeded = false;
+        final computed = AsyncComputed(() async {
+          final computation = computationCount++;
+          final value1 = x.value;
+          await sleep(100);
+          final int value2;
+          if (computation == 0) {
+            value2 = y.value;
+            yReaeded = true;
+          } else {
+            value2 = z.value;
+          }
+          return value1 + value2;
+        });
+
+        final values = [];
+        fakeAsync((async) {
+          final dispose = computed.observe((change) {
+            observationCount++;
+            values.add(change.newValue);
+          });
+
+          async.elapse(Duration(milliseconds: 50));
+          expect(x.isBeingObserved, isTrue);
+          expect(observationCount, equals(1));
+          expect(computationCount, equals(1));
+          x.value = 3; // recompute in the middle of async pause
+          expect(computationCount, equals(2));
+          expect(observationCount, equals(1)); // still loading
+          expect(computed.value, equals(AsyncLoading<int>()));
+          expect(x.isBeingObserved, isTrue);
+
+          async.elapse(Duration(milliseconds: 50)); // Finish 1st async pause
+          expect(yReaeded, isTrue); // 1st call finished;
+          expect(y.isBeingObserved, isFalse); // but y hasn't been observed
+          expect(z.isBeingObserved, isFalse); // still not invoked
+          async.elapse(Duration(milliseconds: 100)); // Finish 2st async pause
+
+          expect(x.isBeingObserved, isTrue);
+          expect(y.isBeingObserved, isFalse);
+          expect(z.isBeingObserved, isTrue);
+          expect(computationCount, equals(2));
+          expect(
+              values,
+              equals([
+                AsyncLoading<int>(),
+                AsyncData<int>(7), // x + z
+              ]));
+          dispose();
+        });
+      },
+    );
   });
 }
