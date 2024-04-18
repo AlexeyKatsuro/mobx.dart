@@ -1,5 +1,7 @@
 part of '../core.dart';
 
+typedef _ResultOrCancel = Object?;
+
 class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivation {
   factory AsyncComputed(
     FutureOr<T> Function() fn, {
@@ -26,7 +28,7 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivati
         ) {
     _fn = () {
       AsyncValue<T>? syncValue;
-      final FutureOr<T> futureOr;
+      final FutureOr<_ResultOrCancel> futureOr;
       final disposer = _Disposer();
       try {
         futureOr = _runInZone(_asyncFn, disposer: disposer);
@@ -34,15 +36,14 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivati
         _state = AsyncDerivationState.upToDate;
         return AsyncValue.error(error, stackTrace);
       }
-      if (futureOr is! Future<T>) {
+      if (futureOr is! Future) {
         _state = AsyncDerivationState.upToDate;
-        return AsyncData(futureOr);
+        return AsyncData(futureOr as T);
       }
       bool sync = true;
       futureOr.then(
         (data) {
-          if (disposer.isDisposed) return;
-
+          if (data is! T || disposer.isDisposed) return;
           if (sync) {
             syncValue = AsyncData(data);
           } else {
@@ -101,7 +102,8 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivati
     });
   }
 
-  FutureOr<R> _runInZone<R>(FutureOr<R> Function() body, {required _Disposer disposer}) {
+  FutureOr<_ResultOrCancel>? _runInZone(FutureOr<T> Function() body,
+      {required _Disposer disposer}) {
     final prevZone = _prevZone;
 
     if (prevZone != null) {
@@ -115,7 +117,7 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivati
 
   R _run<R>(Zone self, ZoneDelegate parent, Zone zone, R Function() f) {
     if (self.disposer.isDisposed) {
-      return parent.run(zone, f);
+      return #cancel as R;
     }
     return _tack(() => parent.run(zone, f));
   }
@@ -124,7 +126,7 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>> with AsyncDerivati
   // when a result is produced
   R _runUnary<R, A>(Zone self, ZoneDelegate parent, Zone zone, R Function(A a) f, A a) {
     if (self.disposer.isDisposed) {
-      return parent.runUnary(zone, f, a);
+      return #cancel as R;
     }
     return _tack(() => parent.runUnary(zone, f, a));
   }

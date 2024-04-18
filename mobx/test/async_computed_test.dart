@@ -130,6 +130,51 @@ void main() {
       });
     });
 
+    test('should work sync with nullable', () async {
+      final x = Observable<int?>(0);
+      final computed = AsyncComputed(() {
+        return x.value;
+      });
+
+      var values = [];
+      computed.observe((change) {
+        values.add(change.newValue);
+      });
+      x.value = null;
+      expect(values, equals([AsyncData<int?>(0), AsyncData<int?>(null)]));
+    });
+
+    test('should work async with nullable', () async {
+      final x = Observable<int?>(0);
+      final computed = AsyncComputed(() async {
+        await sleep(100);
+        return x.value;
+      });
+
+      fakeAsync((async) {
+        var values = [];
+        computed.observe((change) {
+          values.add(change.newValue);
+        });
+        async.elapse(Duration(milliseconds: 100));
+        x.value = null;
+        async.elapse(Duration(milliseconds: 100));
+        x.value = 1;
+        async.elapse(Duration(milliseconds: 100));
+        expect(
+            values,
+            equals([
+              AsyncLoading<int?>(),
+              AsyncData<int?>(0),
+              AsyncLoading<int?>().copyWithPrevious(AsyncData<int?>(0), isRefresh: false),
+              AsyncData<int?>(null),
+              AsyncLoading<int?>().copyWithPrevious(AsyncData<int?>(null), isRefresh: false),
+              AsyncData<int?>(1),
+            ]));
+        expect(x.isBeingObserved, true);
+      });
+    });
+
     test('recompute should emit loading with previous data', () async {
       int computationCount = 0;
       final computed = AsyncComputed(() async {
@@ -460,7 +505,7 @@ void main() {
           expect(x.isBeingObserved, isTrue);
 
           async.elapse(Duration(milliseconds: 50)); // Finish 1st async pause
-          expect(yReaeded, isTrue); // 1st call finished;
+          expect(yReaeded, isFalse); // 1st call finished;
           expect(y.isBeingObserved, isFalse); // but y hasn't been observed
           expect(z.isBeingObserved, isFalse); // still not invoked
           async.elapse(Duration(milliseconds: 100)); // Finish 2st async pause
