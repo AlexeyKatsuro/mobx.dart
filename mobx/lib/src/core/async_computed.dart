@@ -51,7 +51,6 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
       futureOr.then(
         (data) {
           if (data is! T || disposer.isDisposed) return;
-          _futureCompleter.complete(data);
           if (sync) {
             syncValue = AsyncData(data);
           } else {
@@ -60,7 +59,6 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
         },
         onError: (Object error, StackTrace stackTrace) {
           if (disposer.isDisposed) return;
-          // _futureCompleter.completeError(error, stackTrace);
           if (sync) {
             syncValue = AsyncError<T>(error, stackTrace);
           } else {
@@ -79,25 +77,15 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
     };
   }
 
-  Completer<T> _futureCompleter = Completer();
-
   @override
   AsyncValue<T> _updateValue(AsyncValue<T>? previous, AsyncValue<T> next) {
     return next.copyWithPrevious(previous, isRefresh: false);
   }
 
-  @override
-  void _propagateChangeConfirmed() {
-    if (_futureCompleter.isCompleted) {
-      _futureCompleter = Completer();
-    }
-    super._propagateChangeConfirmed();
-  }
+  late final _computedFuture =
+      AsyncComputedFuture(() => value, name: 'AsyncComputedFuture.$name');
 
-  Future<T> get future {
-    throw '';
-    // return _futureCompleter.future;
-  }
+  Future<T> get future => _computedFuture.value;
 
   void endAsyncComputation() {
     _state = AsyncDerivationState.upToDate;
