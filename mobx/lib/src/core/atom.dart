@@ -33,6 +33,7 @@ class Atom with DebugCreationStack {
   }
 
   final ReactiveContext _context;
+
   ReactiveContext get context => _context;
 
   final String name;
@@ -77,6 +78,10 @@ class Atom with DebugCreationStack {
     if (_observers.isEmpty) {
       _context._enqueueForUnobservation(this);
     }
+  }
+
+  void _detachObserver(Derivation d) {
+    _observers.remove(d);
   }
 
   void _notifyOnBecomeObserved() {

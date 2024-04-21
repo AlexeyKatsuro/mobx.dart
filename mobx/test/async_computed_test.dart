@@ -43,7 +43,8 @@ void main() {
       computed.value = AsyncData(1);
       computed.value = AsyncData(2);
 
-      expect(values, equals([AsyncData<int>(0), AsyncData<int>(1), AsyncData<int>(2)]));
+      expect(values,
+          equals([AsyncData<int>(0), AsyncData<int>(1), AsyncData<int>(2)]));
       expect(computationCount, equals(1));
     });
 
@@ -52,10 +53,10 @@ void main() {
       final x = AsyncComputed<void>(() {
         throw exception;
       });
-
       expect(
         x.value,
-        isA<AsyncError<void>>().having((error) => error.error, 'error', equals(exception)),
+        isA<AsyncError<void>>()
+            .having((error) => error.error, 'error', equals(exception)),
       );
       expect(x.errorValue, isNull);
     });
@@ -77,7 +78,8 @@ void main() {
       await pumpEventQueue();
       expect(
         computed.value,
-        isA<AsyncError<void>>().having((error) => error.error, 'error', equals(exception)),
+        isA<AsyncError<void>>()
+            .having((error) => error.error, 'error', equals(exception)),
       );
       expect(computed.errorValue, isNull);
       expect(observationCount, equals(2));
@@ -166,9 +168,11 @@ void main() {
             equals([
               AsyncLoading<int?>(),
               AsyncData<int?>(0),
-              AsyncLoading<int?>().copyWithPrevious(AsyncData<int?>(0), isRefresh: false),
+              AsyncLoading<int?>()
+                  .copyWithPrevious(AsyncData<int?>(0), isRefresh: false),
               AsyncData<int?>(null),
-              AsyncLoading<int?>().copyWithPrevious(AsyncData<int?>(null), isRefresh: false),
+              AsyncLoading<int?>()
+                  .copyWithPrevious(AsyncData<int?>(null), isRefresh: false),
               AsyncData<int?>(1),
             ]));
         expect(x.isBeingObserved, true);
@@ -369,7 +373,8 @@ void main() {
         expect(computationCount, equals(2));
         expect(
           computed.value,
-          isA<AsyncLoading<int>>().having((loading) => loading.value, 'value', equals(6)),
+          isA<AsyncLoading<int>>()
+              .having((loading) => loading.value, 'value', equals(6)),
         );
         async.elapse(Duration(milliseconds: 200));
         expect(computed.value, equals(AsyncData<int>(7)));
@@ -380,7 +385,8 @@ void main() {
       });
     });
 
-    test('should recompute once if several dependencies have changed in action', () async {
+    test('should recompute once if several dependencies have changed in action',
+        () async {
       int observationCount = 0;
       int computationCount = 0;
       final x = Observable(1);
@@ -410,14 +416,16 @@ void main() {
         });
         async.elapse(Duration(milliseconds: 200));
         expect(computationCount, equals(2));
-        expect(observationCount, equals(4)); // 1. loading + data 2. loading + data
+        expect(
+            observationCount, equals(4)); // 1. loading + data 2. loading + data
 
         dispose();
       });
     });
 
     test(
-      'after recompute, should stop tracking dependencies that began to be observed after the async gap',
+      'after recompute, should pause tracking dependencies that began to be observed '
+      'after the async gap and resume at the end of compute',
       () async {
         int observationCount = 0;
         int computationCount = 0;
@@ -440,9 +448,9 @@ void main() {
           });
 
           async.elapse(Duration(milliseconds: 200));
-          expect(x.isBeingObserved, isTrue);
-          expect(y.isBeingObserved, isTrue);
-          expect(z.isBeingObserved, isTrue);
+          expect([x.isBeingObserved, x.hasObservers], [isTrue, isTrue]);
+          expect([y.isBeingObserved, y.hasObservers], [isTrue, isTrue]);
+          expect([z.isBeingObserved, z.hasObservers], [isTrue, isTrue]);
           expect(observationCount, equals(2)); // loading + data
           expect(computationCount, equals(1));
 
@@ -450,14 +458,63 @@ void main() {
           expect(computationCount, equals(2));
           z.value = z.value + 1; // shouldn't trigger new computation
           expect(computationCount, equals(2));
-          expect(x.isBeingObserved, isTrue);
-          expect(y.isBeingObserved, isFalse);
-          expect(z.isBeingObserved, isFalse);
+          expect([x.isBeingObserved, x.hasObservers], [isTrue, isTrue]);
+          expect([y.isBeingObserved, y.hasObservers], [isTrue, isFalse]);
+          expect([z.isBeingObserved, z.hasObservers], [isTrue, isFalse]);
           async.elapse(Duration(milliseconds: 200));
           // Observe again
-          expect(x.isBeingObserved, isTrue);
-          expect(y.isBeingObserved, isTrue);
-          expect(z.isBeingObserved, isTrue);
+          expect([x.isBeingObserved, x.hasObservers], [isTrue, isTrue]);
+          expect([y.isBeingObserved, y.hasObservers], [isTrue, isTrue]);
+          expect([z.isBeingObserved, z.hasObservers], [isTrue, isTrue]);
+          dispose();
+        });
+      },
+    );
+    test(
+      'after recompute, should pause remove detached at the end of compute',
+      () async {
+        int observationCount = 0;
+        int computationCount = 0;
+        final x = Observable(1, name: 'x');
+        final y = Observable(2, name: 'y');
+        final z = Observable(3, name: 'z');
+        final computed = AsyncComputed(() async {
+          computationCount++;
+          final xValue = x.value;
+          await sleep(100);
+          int yValue = 0;
+          if (computationCount < 3) {
+            yValue = y.value;
+          } else {
+            print('object');
+          }
+          await sleep(100);
+          final zValue = z.value;
+          return xValue + yValue + zValue;
+        }, name: 'computed');
+
+        fakeAsync((async) {
+          final dispose = computed.observe((change) {
+            observationCount++;
+          });
+
+          async.elapse(Duration(milliseconds: 200));
+          x.value = x.value + 1; // recompute
+          async.elapse(Duration(milliseconds: 110));
+          expect(computationCount, equals(2));
+          expect([y.isBeingObserved, y.hasObservers], [isTrue, isTrue]);
+          expect([z.isBeingObserved, z.hasObservers], [isTrue, isFalse]);
+
+          y.value = 3; // y should be excluded after it
+          expect(computationCount, equals(3));
+          async.elapse(Duration(milliseconds: 110)); // wait 1th sleep
+          expect([y.isBeingObserved, y.hasObservers], [isTrue, isFalse]);
+          expect([z.isBeingObserved, z.hasObservers], [isTrue, isFalse]);
+          async.elapse(Duration(milliseconds: 110)); // wait 2th sleep
+          // Observe again
+          expect([x.isBeingObserved, x.hasObservers], [isTrue, isTrue]);
+          expect([y.isBeingObserved, y.hasObservers], [isFalse, isFalse]);
+          expect([z.isBeingObserved, z.hasObservers], [isTrue, isTrue]);
           dispose();
         });
       },
@@ -525,4 +582,163 @@ void main() {
       },
     );
   });
+
+  group(
+    'AsyncComputed nested wrapper values',
+    () {
+      test('wrapped sequential results ', () async {
+        int xComputationCount = 0;
+        int yComputationCount = 0;
+        final number = Observable(0, name: 'number');
+        final x = AsyncComputed(() async {
+          xComputationCount++;
+          final numberValue = number.value;
+          await sleep(200);
+          return numberValue;
+        }, name: 'x');
+
+        final y = AsyncComputed(() async {
+          yComputationCount++;
+          final xValue = x.value;
+          await sleep(100);
+          return xValue;
+        }, name: 'y');
+
+        fakeAsync((async) {
+          final values = [];
+          y.observe(
+            (change) {
+              values.add(change.newValue);
+            },
+          );
+
+          // All observables became observed because were read before async pause
+          expect(y.isBeingObserved, isTrue);
+          expect(x.isBeingObserved, isTrue);
+          expect(number.isBeingObserved, isTrue);
+
+          final one = AsyncLoading<AsyncValue<int>>();
+          expect(y.value, equals(one));
+
+          async.elapse(Duration(milliseconds: 100));
+          final two = AsyncData<AsyncValue<int>>(AsyncLoading<int>());
+          expect(y.value, equals(two));
+
+          async.elapse(Duration(milliseconds: 100));
+          final three = one.copyWithPrevious(two, isRefresh: false);
+          expect(y.value, equals(three));
+
+          async.elapse(Duration(milliseconds: 100));
+          final fore = AsyncData<AsyncValue<int>>(AsyncData<int>(0));
+          expect(y.value, equals(fore));
+
+          expect(values, [one, two, three, fore]);
+          expect(y.isBeingObserved, isTrue);
+          expect(x.isBeingObserved, isTrue);
+          expect(number.isBeingObserved, isTrue);
+          expect(xComputationCount, equals(1));
+          expect(yComputationCount, equals(2)); // x loading / x data
+        });
+      });
+
+      test('wrapped consequential results ', () {
+        final number = Observable(0, name: 'number');
+        int xComputationCount = 0;
+        int yComputationCount = 0;
+        final x = AsyncComputed(() async {
+          xComputationCount++;
+          final numberValue = number.value;
+          await sleep(50);
+          return numberValue;
+        }, name: 'x');
+
+        final y = AsyncComputed(() async {
+          yComputationCount++;
+          final xValue = x.value;
+          await sleep(100);
+          return xValue;
+        }, name: 'y');
+
+        fakeAsync((async) {
+          final values = [];
+          y.observe((change) => values.add(change.newValue));
+          expect(y.value, equals(AsyncLoading<AsyncValue<int>>()));
+          async.elapse(Duration(milliseconds: 160));
+          expect(
+              y.value, equals(AsyncData<AsyncValue<int>>(AsyncData<int>(0))));
+          expect(values, [
+            AsyncLoading<AsyncValue<int>>(),
+            AsyncData<AsyncValue<int>>(AsyncData<int>(0))
+          ]);
+          expect(y.isBeingObserved, isTrue);
+          expect(x.isBeingObserved, isTrue);
+          expect(number.isBeingObserved, isTrue);
+          expect(xComputationCount, equals(1));
+          expect(yComputationCount, equals(2)); // x loading / x data
+        });
+      });
+
+      test('wrapped sequential results if read after async gap', () async {
+        int xComputationCount = 0;
+        int yComputationCount = 0;
+        final number = Observable(0, name: 'number');
+        final x = AsyncComputed(() async {
+          xComputationCount++;
+          await sleep(100);
+          return number.value;
+        }, name: 'x');
+
+        final y = AsyncComputed(() async {
+          yComputationCount++;
+          await sleep(100);
+          return x.value;
+        }, name: 'y');
+
+        fakeAsync((async) {
+          final values = [];
+          y.observe((change) {
+            values.add(change.newValue);
+          });
+
+          final one = AsyncLoading<AsyncValue<int>>();
+          expect(y.value, equals(one));
+          expect(xComputationCount, equals(0));
+          expect(yComputationCount, equals(1));
+          expect(y.isBeingObserved, isTrue);
+          expect(x.isBeingObserved, isFalse);
+          expect(number.isBeingObserved, isFalse);
+
+          async.elapse(Duration(milliseconds: 110));
+          final two = AsyncData<AsyncValue<int>>(AsyncLoading<int>());
+          expect(y.value, equals(two));
+          expect(x.value, equals(AsyncLoading<int>()));
+          expect(xComputationCount, equals(1));
+          expect(yComputationCount, equals(1));
+          expect(x.isBeingObserved, isTrue);
+
+          async.elapse(Duration(milliseconds: 110));
+          final three = one.copyWithPrevious(two, isRefresh: false);
+          expect(xComputationCount, equals(1));
+          expect(yComputationCount, equals(2));
+          // x already finished
+          expect(x.value, equals(AsyncData<int>(0)));
+          // but y started recomputing and waiting 1th sleep
+          expect(y.value, equals(three));
+
+          async.elapse(Duration(milliseconds: 100));
+          final fore = AsyncData<AsyncValue<int>>(AsyncData<int>(0));
+          expect(y.value, equals(fore));
+          expect(values, [one, two, three, fore]);
+          expect(y.isBeingObserved, isTrue);
+          expect(x.isBeingObserved, isTrue);
+          expect(number.isBeingObserved, isTrue);
+          expect(xComputationCount, equals(1));
+          expect(yComputationCount, equals(2)); // x loading / x data
+        });
+      });
+    },
+    timeout: Timeout(
+      Duration(minutes: 10),
+    ),
+  );
 }

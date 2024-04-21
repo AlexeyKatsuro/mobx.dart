@@ -23,18 +23,57 @@ enum DerivationState {
   stale
 }
 
-abstract class Derivation {
+abstract mixin class Derivation {
   String get name;
-  late Set<Atom> _observables;
+
+  Set<Atom> _observables = {};
   Set<Atom>? _newObservables;
 
   MobXCaughtException? _errorValue;
-  MobXCaughtException? get errorValue;
 
-  late DerivationState _dependenciesState;
+  MobXCaughtException? get errorValue => _errorValue;
+
+  DerivationState _dependenciesState = DerivationState.notTracking;
 
   void _onBecomeStale();
 
   // ignore: unused_element
   void _suspend();
+
+  void _bindDependencies() {
+    final derivation = this;
+    final staleObservables =
+        derivation._observables.difference(derivation._newObservables!);
+    final newObservables =
+        derivation._newObservables!.difference(derivation._observables);
+    var lowestNewDerivationState = DerivationState.upToDate;
+
+    // Add newly found observables
+    for (final observable in newObservables) {
+      observable._addObserver(derivation);
+
+      // Computed = Observable + Derivation
+      if (observable is Computed) {
+        if (observable._dependenciesState.index >
+            lowestNewDerivationState.index) {
+          lowestNewDerivationState = observable._dependenciesState;
+        }
+      }
+    }
+
+    // Remove previous observables
+    for (final ob in staleObservables) {
+      ob._removeObserver(derivation);
+    }
+
+    if (lowestNewDerivationState != DerivationState.upToDate) {
+      derivation
+        .._dependenciesState = lowestNewDerivationState
+        .._onBecomeStale();
+    }
+
+    derivation
+      .._observables = derivation._newObservables!
+      .._newObservables = {}; // No need for newObservables beyond this point
+  }
 }

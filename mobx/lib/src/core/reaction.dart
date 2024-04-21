@@ -1,6 +1,6 @@
 part of '../core.dart';
 
-abstract class Reaction implements Derivation {
+abstract mixin class Reaction implements Derivation {
   bool get isDisposed;
 
   void dispose();
@@ -10,7 +10,7 @@ abstract class Reaction implements Derivation {
   StackTrace? get debugCreationStack;
 }
 
-class ReactionImpl with DebugCreationStack implements Reaction {
+class ReactionImpl with DebugCreationStack, Reaction, Derivation {
   ReactionImpl(this._context, Function() onInvalidate,
       {required this.name, void Function(Object, Reaction)? onError}) {
     _onInvalidate = onInvalidate;
@@ -28,24 +28,7 @@ class ReactionImpl with DebugCreationStack implements Reaction {
   @override
   final String name;
 
-  @override
-  Set<Atom>? _newObservables;
-
-  @override
-  // ignore: prefer_final_fields
-  Set<Atom> _observables = {};
-
   bool get hasObservables => _observables.isNotEmpty;
-
-  @override
-  // ignore: prefer_final_fields
-  DerivationState _dependenciesState = DerivationState.notTracking;
-
-  @override
-  MobXCaughtException? _errorValue;
-
-  @override
-  MobXCaughtException? get errorValue => _errorValue;
 
   @override
   bool get isDisposed => _isDisposed;

@@ -1,6 +1,6 @@
 part of '../core.dart';
 
-class Computed<T> extends Atom implements Derivation, ObservableValue<T> {
+class Computed<T> extends Atom with Derivation implements ObservableValue<T> {
   /// Creates a computed value with an optional [name].
   ///
   /// The passed in function: [fn], is used to give back the computed value.
@@ -53,23 +53,9 @@ class Computed<T> extends Atom implements Derivation, ObservableValue<T> {
   final bool _keepAlive;
 
   @override
-  MobXCaughtException? _errorValue;
-
-  @override
   MobXCaughtException? get errorValue => _errorValue;
 
-  @override
-  // ignore: prefer_final_fields
-  Set<Atom> _observables = {};
-
-  @override
-  Set<Atom>? _newObservables;
-
   T Function() _fn;
-
-  @override
-  // ignore: prefer_final_fields
-  DerivationState _dependenciesState = DerivationState.notTracking;
 
   T? _value;
 
@@ -92,7 +78,7 @@ class Computed<T> extends Atom implements Derivation, ObservableValue<T> {
       reportObserved();
       if (_context._shouldCompute(this)) {
         if (_trackAndCompute()) {
-          _context._propagateChangeConfirmed(this);
+          _propagateChangeConfirmed();
         }
       }
     }
@@ -141,6 +127,10 @@ class Computed<T> extends Atom implements Derivation, ObservableValue<T> {
   @override
   void _onBecomeStale() {
     _context._propagatePossiblyChanged(this);
+  }
+
+  void _propagateChangeConfirmed() {
+    _context._propagateChangeConfirmed(this);
   }
 
   bool _trackAndCompute() {

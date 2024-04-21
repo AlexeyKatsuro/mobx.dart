@@ -25,6 +25,8 @@ class _ReactiveState {
   /// Tracks if within a computed property evaluation
   int computationDepth = 0;
 
+  int asyncComputationDepth = 0;
+
   /// Tracks if observables can be mutated
   bool allowStateChanges = true;
 
@@ -109,6 +111,7 @@ class ReactiveContext {
   late ReactiveConfig _config;
 
   ReactiveConfig get config => _config;
+
   set config(ReactiveConfig newValue) {
     _config = newValue;
     _state.allowStateChanges = _config.writePolicy == ReactiveWritePolicy.never;
@@ -150,6 +153,11 @@ class ReactiveContext {
     _state.batch++;
   }
 
+  void startAsyncBatch() {
+    _state.asyncComputationDepth++;
+    startBatch();
+  }
+
   void endBatch() {
     if (--_state.batch == 0) {
       runReactions();
@@ -174,6 +182,11 @@ class ReactiveContext {
 
       _state.pendingUnobservations = [];
     }
+  }
+
+  void endAsyncBatch() {
+    _state.asyncComputationDepth--;
+    endBatch();
   }
 
   void enforceReadPolicy(Atom atom) {
@@ -242,7 +255,7 @@ class ReactiveContext {
 
   void _endTracking(Derivation currentDerivation, Derivation? prevDerivation) {
     _state.trackingDerivation = prevDerivation;
-    _bindDependencies(currentDerivation);
+    currentDerivation._bindDependencies();
   }
 
   T? trackDerivation<T>(Derivation d, T Function() fn) {
@@ -276,42 +289,6 @@ class ReactiveContext {
           .._notifyOnBecomeObserved();
       }
     }
-  }
-
-  void _bindDependencies(Derivation derivation) {
-    final staleObservables =
-        derivation._observables.difference(derivation._newObservables!);
-    final newObservables =
-        derivation._newObservables!.difference(derivation._observables);
-    var lowestNewDerivationState = DerivationState.upToDate;
-
-    // Add newly found observables
-    for (final observable in newObservables) {
-      observable._addObserver(derivation);
-
-      // Computed = Observable + Derivation
-      if (observable is Computed) {
-        if (observable._dependenciesState.index >
-            lowestNewDerivationState.index) {
-          lowestNewDerivationState = observable._dependenciesState;
-        }
-      }
-    }
-
-    // Remove previous observables
-    for (final ob in staleObservables) {
-      ob._removeObserver(derivation);
-    }
-
-    if (lowestNewDerivationState != DerivationState.upToDate) {
-      derivation
-        .._dependenciesState = lowestNewDerivationState
-        .._onBecomeStale();
-    }
-
-    derivation
-      .._observables = derivation._newObservables!
-      .._newObservables = {}; // No need for newObservables beyond this point
   }
 
   void addPendingReaction(Reaction reaction) {
