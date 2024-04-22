@@ -31,7 +31,7 @@ class MutableComputed<T> extends Computed<T> {
     return next;
   }
 
-  T recompute() {
+  void recompute({RecomputePolicy? policy}) {
     if (_isComputing) {
       throw MobXCyclicReactionException(
           'recompute during computation not allowed. $name: $_fn');
@@ -39,10 +39,8 @@ class MutableComputed<T> extends Computed<T> {
 
     _context
       ..startBatch()
-      .._propagatePossiblyChanged(this);
-    _dependenciesState = DerivationState.stale;
-    _context.endBatch();
-    return value;
+      .._requestRecompute(this)
+      ..endBatch();
   }
 
   @override

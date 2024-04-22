@@ -435,8 +435,104 @@ void main() {
       }, throwsException);
       expect(x.errorValue, isException);
       x.recompute();
-
+      expect(x.value, equals(null));
       expect(x.errorValue, isNull);
+    });
+
+    group('recompute', () {
+      group('single policy', () {
+        test('should propagate changes to observers', () {
+          final policy = RecomputePolicy.cascadeForError;
+          var untrackedValue = 5;
+          var xExecutionCount = 0;
+          final x = MutableComputed(() {
+            xExecutionCount++;
+            return untrackedValue;
+          }, name: 'x');
+
+          final values = [];
+          final dispose1 = x.observe((change) {
+            values.add(change.newValue);
+          });
+
+          expect(values, equals([5]));
+          expect(xExecutionCount, equals(1));
+
+          x.recompute(policy: policy);
+          expect(values, equals([5])); // no changes
+          expect(xExecutionCount, equals(2));
+
+          untrackedValue = 10;
+          x.recompute(policy: policy);
+          expect(values, equals([5, 10]));
+          expect(xExecutionCount, equals(3));
+
+          dispose1(); // no more observations
+        });
+
+        test('should propagate error to observers', () {
+          final policy = RecomputePolicy.cascadeForError;
+          var xExecutionCount = 0;
+          var yExecutionCount = 0;
+          final exception = Exception('FAIL');
+
+          final x = MutableComputed(() {
+            xExecutionCount++;
+            if (xExecutionCount == 2) {
+              throw exception;
+            }
+            return 5;
+          }, name: 'x');
+
+          final y = MutableComputed(() {
+            yExecutionCount++;
+            return x.value * 2;
+          }, name: 'y');
+
+          final values = [];
+          final dispose1 = y.observe((change) {
+            values.add(change.newValue);
+          });
+
+          expect(values, equals([10]));
+          expect(xExecutionCount, equals(1));
+          expect(yExecutionCount, equals(1));
+
+          x.recompute(policy: policy);
+          expect(() => y.value, throwsException);
+          expect(x.errorValue, isException);
+          expect(y.errorValue, isException);
+          expect(xExecutionCount, equals(2));
+          expect(yExecutionCount, equals(2));
+          expect(values, equals([10]));
+          dispose1(); // no more observations
+        });
+
+        test('should rerun only target Computed', () {
+          final policy = RecomputePolicy.cascadeForError;
+          var xExecutionCount = 0;
+          var yExecutionCount = 0;
+
+          final x = MutableComputed(() {
+            xExecutionCount++;
+            return 5;
+          }, name: 'x');
+
+          final y = MutableComputed(() {
+            yExecutionCount++;
+            return x.value * 2;
+          }, name: 'y');
+
+          final dispose1 = y.observe((change) {});
+
+          expect(xExecutionCount, equals(1));
+          expect(yExecutionCount, equals(1));
+          y.recompute(policy: policy);
+          expect(xExecutionCount, equals(1));
+          expect(yExecutionCount, equals(2));
+          dispose1(); // no more observations
+        });
+      });
     });
   });
 }

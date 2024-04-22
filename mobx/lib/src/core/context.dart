@@ -69,7 +69,7 @@ class ReactiveConfig {
     this.readPolicy = ReactiveReadPolicy.never,
     this.maxIterations = 100,
     this.isSpyEnabled = false,
-    this.recomputePolicy = RecomputePolicy.cascadeForError,
+    this.recomputePolicy = RecomputePolicy.single,
   });
 
   /// The main or default configuration used by [ReactiveContext]
@@ -362,6 +362,48 @@ class ReactiveContext {
         observer._onBecomeStale();
       }
       observer._dependenciesState = DerivationState.stale;
+    }
+  }
+
+  void _requestRecompute(Computed computed, {RecomputePolicy? policy}) {
+    final recomputePolicy = policy ?? config.recomputePolicy;
+
+    void propagatePossiblyChanged() {
+      _propagatePossiblyChanged(computed);
+    }
+
+    switch (recomputePolicy) {
+      case RecomputePolicy.single:
+        {
+          propagatePossiblyChanged();
+          computed._dependenciesState = DerivationState.stale;
+        }
+      case RecomputePolicy.cascadeForError:
+        {
+          final dependOnComputations = computed._observables
+              .whereType<Computed>()
+              .where(_hasCaughtException);
+          if (dependOnComputations.isNotEmpty) {
+            for (final computed in dependOnComputations) {
+              _requestRecompute(computed, policy: recomputePolicy);
+            }
+          } else {
+            propagatePossiblyChanged();
+            return;
+          }
+        }
+      case RecomputePolicy.cascade:
+        {
+          final dependOnComputations =
+              computed._observables.whereType<Computed>();
+          if (dependOnComputations.isNotEmpty) {
+            for (final computed in dependOnComputations) {
+              _requestRecompute(computed, policy: recomputePolicy);
+            }
+          } else {
+            propagatePossiblyChanged();
+          }
+        }
     }
   }
 
