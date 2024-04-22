@@ -39,7 +39,7 @@ class MutableComputed<T> extends Computed<T> {
 
     _context
       ..startBatch()
-      .._requestRecompute(this)
+      .._requestRecompute(this, policy: policy)
       ..endBatch();
   }
 

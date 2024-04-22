@@ -69,7 +69,7 @@ class ReactiveConfig {
     this.readPolicy = ReactiveReadPolicy.never,
     this.maxIterations = 100,
     this.isSpyEnabled = false,
-    this.recomputePolicy = RecomputePolicy.single,
+    this.recomputePolicy = RecomputePolicy.cascadeForError,
   });
 
   /// The main or default configuration used by [ReactiveContext]
@@ -376,7 +376,6 @@ class ReactiveContext {
       case RecomputePolicy.single:
         {
           propagatePossiblyChanged();
-          computed._dependenciesState = DerivationState.stale;
         }
       case RecomputePolicy.cascadeForError:
         {
@@ -389,7 +388,6 @@ class ReactiveContext {
             }
           } else {
             propagatePossiblyChanged();
-            return;
           }
         }
       case RecomputePolicy.cascade:
@@ -405,6 +403,7 @@ class ReactiveContext {
           }
         }
     }
+    computed._dependenciesState = DerivationState.stale;
   }
 
   void _propagatePossiblyChanged(Atom atom) {

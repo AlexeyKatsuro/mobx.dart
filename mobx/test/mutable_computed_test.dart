@@ -438,11 +438,10 @@ void main() {
       expect(x.value, equals(null));
       expect(x.errorValue, isNull);
     });
-
     group('recompute', () {
       group('single policy', () {
         test('should propagate changes to observers', () {
-          final policy = RecomputePolicy.cascadeForError;
+          final policy = RecomputePolicy.single;
           var untrackedValue = 5;
           var xExecutionCount = 0;
           final x = MutableComputed(() {
@@ -471,7 +470,7 @@ void main() {
         });
 
         test('should propagate error to observers', () {
-          final policy = RecomputePolicy.cascadeForError;
+          final policy = RecomputePolicy.single;
           var xExecutionCount = 0;
           var yExecutionCount = 0;
           final exception = Exception('FAIL');
@@ -509,7 +508,7 @@ void main() {
         });
 
         test('should rerun only target Computed', () {
-          final policy = RecomputePolicy.cascadeForError;
+          final policy = RecomputePolicy.single;
           var xExecutionCount = 0;
           var yExecutionCount = 0;
 
@@ -530,6 +529,113 @@ void main() {
           y.recompute(policy: policy);
           expect(xExecutionCount, equals(1));
           expect(yExecutionCount, equals(2));
+          dispose1(); // no more observations
+        });
+      });
+      group('cascadeError policy', () {
+        test('should rerun only observables with error state', () {
+          final policy = RecomputePolicy.cascadeForError;
+          var observationCount = 0;
+          var xExecutionCount = 0;
+          var yExecutionCount = 0;
+          var zExecutionCount = 0;
+
+          final exception = Exception('FAIL');
+          var shouldThrow = true;
+          final x = MutableComputed<int>(() {
+            xExecutionCount++;
+            if (shouldThrow) {
+              shouldThrow = false;
+              throw exception;
+            }
+            return 5;
+          }, name: 'x');
+
+          final y = MutableComputed(() {
+            yExecutionCount++;
+            return 10;
+          }, name: 'y');
+
+          final z = MutableComputed(() {
+            zExecutionCount++;
+            return y.value + x.value;
+          }, name: 'z');
+
+          final dispose1 = z.observe((change) {
+            observationCount++;
+          });
+
+          expect(() => z.value, throwsA(isA<MobXCaughtException>()));
+          expect(xExecutionCount, equals(1));
+          expect(yExecutionCount, equals(1));
+          expect(zExecutionCount, equals(1));
+          expect(observationCount, equals(0)); // because error;
+
+          z.recompute(policy: policy);
+          expect(xExecutionCount, equals(2)); // error be recomputed
+          expect(yExecutionCount, equals(1)); // shouldn't be recomputed
+          expect(zExecutionCount, equals(2));
+          expect(observationCount, equals(1));
+
+          z.recompute(policy: policy);
+          expect(xExecutionCount, equals(2)); // shouldn't be recomputed again
+          expect(yExecutionCount, equals(1)); // shouldn't be recomputed
+          expect(zExecutionCount, equals(3));
+          expect(observationCount, equals(1)); // final results the same
+          dispose1(); // no more observations
+        });
+      });
+      group('cascade policy', () {
+        test('should rerun all observables', () {
+          final policy = RecomputePolicy.cascade;
+          var observationCount = 0;
+          var xExecutionCount = 0;
+          var yExecutionCount = 0;
+          var zExecutionCount = 0;
+
+          final exception = Exception('FAIL');
+          var shouldThrow = true;
+          final x = MutableComputed<int>(() {
+            xExecutionCount++;
+            if (shouldThrow) {
+              shouldThrow = false;
+              throw exception;
+            }
+            return 5;
+          }, name: 'x');
+
+          final y = MutableComputed(() {
+            yExecutionCount++;
+            return 10;
+          }, name: 'y');
+
+          final z = MutableComputed(() {
+            zExecutionCount++;
+            return y.value + x.value;
+          }, name: 'z');
+
+          final dispose1 = z.observe((change) {
+            observationCount++;
+          });
+
+          expect(() => z.value, throwsA(isA<MobXCaughtException>()));
+          expect(xExecutionCount, equals(1));
+          expect(yExecutionCount, equals(1));
+          expect(zExecutionCount, equals(1));
+          expect(observationCount, equals(0)); // because error;
+
+          z.recompute(policy: policy);
+          expect(z.value, equals(15));
+          expect(xExecutionCount, equals(2));
+          expect(yExecutionCount, equals(2));
+          expect(zExecutionCount, equals(2));
+          expect(observationCount, equals(1));
+
+          z.recompute(policy: policy);
+          expect(xExecutionCount, equals(3));
+          expect(yExecutionCount, equals(3));
+          expect(zExecutionCount, equals(3));
+          expect(observationCount, equals(1));
           dispose1(); // no more observations
         });
       });
