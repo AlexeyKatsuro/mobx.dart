@@ -152,7 +152,8 @@ void main() {
 
       var observationCount = 0;
 
-      final evens = MutableComputed(() => list.where((element) => element.isEven).toList(),
+      final evens = MutableComputed(
+          () => list.where((element) => element.isEven).toList(),
           equals: const ListEquality().equals);
 
       final dispose = evens.observe((change) {
@@ -178,7 +179,8 @@ void main() {
 
       int fn() => 1;
 
-      final c = MutableComputed(fn, context: context)..computeValue(track: true);
+      final c = MutableComputed(fn, context: context)
+        ..computeValue(track: true);
 
       verify(() => context.nameFor('MutableComputed'));
       verify(() => context.trackDerivation(c, fn));
@@ -212,12 +214,14 @@ void main() {
       }, throwsException);
 
       // ignore: avoid_as
-      expect((c1.errorValue?.exception as MobXException).message.toLowerCase(), contains('cycle'));
+      expect((c1.errorValue?.exception as MobXException).message.toLowerCase(),
+          contains('cycle'));
     });
 
     test('with disableErrorBoundaries = true, exception is thrown', () {
       final c = MutableComputed(() => throw Exception('FAIL'),
-          context: createContext(config: ReactiveConfig(disableErrorBoundaries: true)));
+          context: createContext(
+              config: ReactiveConfig(disableErrorBoundaries: true)));
 
       expect(() => c.value, throwsException);
     });
@@ -281,7 +285,9 @@ void main() {
       expect(calcs, 1);
     });
 
-    test("keeping computed properties alive caches values on subsequent accesses", () {
+    test(
+        "keeping computed properties alive caches values on subsequent accesses",
+        () {
       var calcs = 0;
       final x = Observable(1);
       final y = MutableComputed(() {
@@ -294,7 +300,8 @@ void main() {
       expect(calcs, 1); // only one calculation: cached!
     });
 
-    test("keeping computed properties alive does not recalculate when dirty", () {
+    test("keeping computed properties alive does not recalculate when dirty",
+        () {
       var calcs = 0;
       final x = Observable(1);
       final y = MutableComputed(() {
@@ -309,7 +316,9 @@ void main() {
       expect(y.value, 6);
     });
 
-    test("keeping computed properties alive recalculates when accessing it dirty", () {
+    test(
+        "keeping computed properties alive recalculates when accessing it dirty",
+        () {
       var calcs = 0;
       final x = Observable(1);
       final y = MutableComputed(() {
@@ -352,7 +361,7 @@ void main() {
       dispose1(); // no more observations
     });
 
-    test("recompute set should triggers observers only", () {
+    test("recompute should triggers observers only", () {
       final x = Observable(10);
       final y = Observable(20);
 
@@ -379,6 +388,35 @@ void main() {
       expect(total.value, equals(20));
       expect(observationCount, equals(2));
       expect(executionCount, equals(2));
+
+      dispose1(); // no more observations
+    });
+
+    test("set value should triggers observers only", () {
+      var executionCount = 0;
+      var observationCount = 0;
+
+      final x = MutableComputed(() {
+        executionCount++;
+        return 5;
+      }, name: 'x');
+
+      final total = MutableComputed(() {
+        return x.value * 2;
+      }, name: 'total');
+
+      final dispose1 = total.observe((change) {
+        observationCount++;
+      });
+
+      expect(total.value, equals(10));
+      expect(observationCount, equals(1));
+      expect(executionCount, equals(1));
+      x.value = 20;
+
+      expect(total.value, equals(40));
+      expect(observationCount, equals(2));
+      expect(executionCount, equals(1));
 
       dispose1(); // no more observations
     });

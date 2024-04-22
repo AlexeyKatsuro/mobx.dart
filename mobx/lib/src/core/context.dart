@@ -55,6 +55,12 @@ enum ReactiveReadPolicy { always, never }
 /// `never`: Allow mutating observables outside actions
 enum ReactiveWritePolicy { observed, always, never }
 
+enum RecomputePolicy {
+  single,
+  cascade,
+  cascadeForError,
+}
+
 /// Configuration used by [ReactiveContext]
 class ReactiveConfig {
   ReactiveConfig({
@@ -63,6 +69,7 @@ class ReactiveConfig {
     this.readPolicy = ReactiveReadPolicy.never,
     this.maxIterations = 100,
     this.isSpyEnabled = false,
+    this.recomputePolicy = RecomputePolicy.cascadeForError,
   });
 
   /// The main or default configuration used by [ReactiveContext]
@@ -88,19 +95,25 @@ class ReactiveConfig {
 
   final bool isSpyEnabled;
 
-  ReactiveConfig clone(
-          {bool? disableErrorBoundaries,
-          ReactiveWritePolicy? writePolicy,
-          ReactiveReadPolicy? readPolicy,
-          int? maxIterations,
-          bool? isSpyEnabled}) =>
+  final RecomputePolicy recomputePolicy;
+
+  ReactiveConfig clone({
+    bool? disableErrorBoundaries,
+    ReactiveWritePolicy? writePolicy,
+    ReactiveReadPolicy? readPolicy,
+    int? maxIterations,
+    bool? isSpyEnabled,
+    RecomputePolicy? recomputePolicy,
+  }) =>
       ReactiveConfig(
-          disableErrorBoundaries:
-              disableErrorBoundaries ?? this.disableErrorBoundaries,
-          writePolicy: writePolicy ?? this.writePolicy,
-          readPolicy: readPolicy ?? this.readPolicy,
-          maxIterations: maxIterations ?? this.maxIterations,
-          isSpyEnabled: isSpyEnabled ?? this.isSpyEnabled);
+        disableErrorBoundaries:
+            disableErrorBoundaries ?? this.disableErrorBoundaries,
+        writePolicy: writePolicy ?? this.writePolicy,
+        readPolicy: readPolicy ?? this.readPolicy,
+        maxIterations: maxIterations ?? this.maxIterations,
+        isSpyEnabled: isSpyEnabled ?? this.isSpyEnabled,
+        recomputePolicy: recomputePolicy ?? this.recomputePolicy,
+      );
 }
 
 class ReactiveContext {

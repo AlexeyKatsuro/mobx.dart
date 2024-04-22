@@ -762,14 +762,20 @@ void main() {
         dispose();
       });
 
-      test('return future error', () async {
+      test('should propagate the error through the dependents', () async {
         int computationCount = 0;
         int observationCount = 0;
         final exception = Exception('FAIL');
-        final computed = AsyncComputed(
+        final dependency = AsyncComputed<int>(
           () async {
             computationCount++;
             throw exception;
+          },
+        );
+
+        final computed = AsyncComputed(
+          () async {
+            return await dependency.future;
           },
         );
 
@@ -785,6 +791,8 @@ void main() {
                 .having((error) => error.error, 'error', equals(exception)));
         expect(computationCount, 1);
         expect(observationCount, 1);
+        expect([dependency.isBeingObserved, dependency.hasObservers],
+            [isTrue, isTrue]);
         expect([computed.isBeingObserved, computed.hasObservers],
             [isTrue, isTrue]);
         dispose();
@@ -816,7 +824,7 @@ void main() {
         expect(computed.value, AsyncLoading<int>());
       });
 
-      test('sequential results ', () async {
+      test('should propagate the value through the dependents', () async {
         int xComputationCount = 0;
         int yComputationCount = 0;
         int number = 0;
@@ -857,7 +865,164 @@ void main() {
           expect(yComputationCount, equals(1));
         });
       });
+
+      test('propagate consequential results ', () {
+        int numberComputationCount = 0;
+        int xComputationCount = 0;
+        int yComputationCount = 0;
+        final number = AsyncComputed(() async {
+          numberComputationCount++;
+          await sleep(50);
+          return 5;
+        }, name: 'number');
+
+        final x = AsyncComputed(() async {
+          xComputationCount++;
+          return await number.future;
+        }, name: 'x');
+
+        final y = AsyncComputed(() async {
+          yComputationCount++;
+          final xValue = await x.future;
+          await sleep(100);
+          return xValue * 2;
+        }, name: 'y');
+
+        fakeAsync((async) {
+          final values = [];
+          y.observe((change) => values.add(change.newValue));
+          expect(y.value, equals(AsyncLoading<int>()));
+
+          async.elapse(Duration(milliseconds: 60));
+          expect(x.value, equals(AsyncData<int>(5)));
+          expect(y.value, equals(AsyncLoading<int>()));
+
+          async.elapse(Duration(milliseconds: 110));
+          expect(y.value, equals(AsyncData<int>(10)));
+          expect(values, [AsyncLoading<int>(), AsyncData<int>(10)]);
+
+          expect(y.isBeingObserved, isTrue);
+          expect(x.isBeingObserved, isTrue);
+          expect(number.isBeingObserved, isTrue);
+
+          expect(numberComputationCount, equals(1));
+          expect(xComputationCount, equals(1));
+          expect(yComputationCount, equals(1));
+        });
+      });
+
+      test('should propagate the changes through the dependents', () async {
+        int observationCount = 0;
+        int yComputationCount = 0;
+        int xComputationCount = 0;
+        final exception = Exception('FAIL');
+
+        final x = AsyncComputed(() async {
+          xComputationCount++;
+          await sleep(100);
+          return 5;
+        }, name: 'x');
+        final y = AsyncComputed(() async {
+          yComputationCount++;
+          return await x.future * 2;
+        }, name: 'y');
+
+        final dispose = autorun((_) {
+          observationCount++;
+          if (observationCount == 1) {
+            expect(y.future, completion(10));
+          }
+          if (observationCount == 2) {
+            expect(y.future, completion(20));
+          }
+          if (observationCount == 3) {
+            expect(y.future, throwsA(equals(exception)));
+          }
+          if (observationCount == 4) {
+            expect(y.future, completion(10));
+          }
+        });
+        await Future.delayed(Duration(milliseconds: 100));
+        expect(observationCount, equals(1));
+        expect(yComputationCount, equals(1));
+        expect(y.value, equals(AsyncData(10)));
+        
+        x.value = AsyncData(10);
+        await pumpEventQueue();
+        expect(yComputationCount, equals(2));
+        expect(observationCount, equals(2));
+        expect(y.value, equals(AsyncData(20)));
+        
+        x.value = AsyncError(exception, StackTrace.current);
+        await pumpEventQueue();
+        expect(observationCount, equals(3));
+        expect(yComputationCount, equals(3));
+        expect(y.value, equals(x.value.copyWithPrevious(AsyncData(20))));
+
+        x.recompute();
+        await Future.delayed(Duration(milliseconds: 100));
+        expect(observationCount, equals(4));
+        expect(yComputationCount, equals(4));
+        expect(xComputationCount, equals(2));
+        // await pumpEventQueue();
+        //
+        // expect(observationCount, equals(3));
+        // expect(yComputationCount, equals(3));
+        // expect(xComputationCount, equals(1));
+        // await pumpEventQueue();
+        dispose();
+      });
+
+      /*test('should propagate the changes through the dependents', () async {
+        int observationCount = 0;
+        int xComputationCount = 0;
+        int yComputationCount = 0;
+        final exception = Exception('FAIL');
+        final x = AsyncComputed(
+          () async {
+            xComputationCount++;
+            await sleep(100);
+            return 5;
+          },
+          name: 'x',
+        );
+
+        final y = AsyncComputed(() async {
+          yComputationCount++;
+          final xValue = await x.future;
+          return xValue * 2;
+        }, name: 'y');
+
+        final dispose = autorun((_) {
+          observationCount++;
+          print('observationCount');
+          if (observationCount == 1) {
+            expect(y.future, completion(10));
+          }
+          if (observationCount == 2) {
+            expect(y.future, completion(20));
+          }
+          if (observationCount == 3) {
+            expect(y.future, throwsA(equals(exception)));
+          }
+        });
+        await Future.delayed(Duration(milliseconds: 100));
+        expect(observationCount, equals(1));
+        expect(xComputationCount, equals(1));
+        expect(yComputationCount, equals(1));
+        Observable(0).value = 1;
+        x.value = AsyncData(10);
+        expect(observationCount, equals(2));
+        expect(yComputationCount, equals(2));
+        expect(xComputationCount, equals(1));
+        await pumpEventQueue();
+        x.value = AsyncError(exception, StackTrace.current);
+        expect(observationCount, equals(3));
+        expect(yComputationCount, equals(3));
+        expect(xComputationCount, equals(1));
+        await pumpEventQueue();
+        dispose();
+      });*/
     },
-    timeout: Timeout(Duration(minutes: 10)),
   );
 }

@@ -34,6 +34,7 @@ class AsyncComputedFuture<T> extends Computed<Future<T>> {
               case AsyncData():
                 {
                   if (newValue.value != prevValue.value) {
+                    _completer = null;
                     future = Future.value(newValue.value);
                   } else {
                     future = _value!;
@@ -41,6 +42,7 @@ class AsyncComputedFuture<T> extends Computed<Future<T>> {
                 }
               case AsyncError():
                 {
+                  _completer = null;
                   future = Future.value(newValue.value);
                 }
               case AsyncLoading():
@@ -50,6 +52,7 @@ class AsyncComputedFuture<T> extends Computed<Future<T>> {
                 }
               case null:
                 {
+                  _completer = null;
                   future = Future.value(newValue.value);
                 }
             }
@@ -59,12 +62,14 @@ class AsyncComputedFuture<T> extends Computed<Future<T>> {
             switch (prevValue) {
               case AsyncData():
                 {
+                  _completer = null;
                   future = Future.error(newValue.error, newValue.stackTrace);
                 }
               case AsyncError():
                 {
                   if (prevValue.error != newValue.error ||
                       prevValue.stackTrace != newValue.stackTrace) {
+                    _completer = null;
                     future = Future.error(newValue.error, newValue.stackTrace);
                   } else {
                     future = _value!;
@@ -77,6 +82,7 @@ class AsyncComputedFuture<T> extends Computed<Future<T>> {
                 }
               case null:
                 {
+                  _completer = null;
                   future = Future.error(newValue.error, newValue.stackTrace);
                 }
             }
