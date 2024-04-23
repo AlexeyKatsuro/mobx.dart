@@ -116,6 +116,8 @@ class Computed<T> extends Atom with Derivation implements ObservableValue<T> {
     return value;
   }
 
+  bool get isComputed => !_context._shouldCompute(this);
+
   @override
   void _suspend() {
     if (!this._keepAlive) {
