@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:mobx/mobx.dart' hide when;
-import 'package:mobx/src/api/async.dart';
 import 'package:mobx/src/utils.dart';
 import 'package:test/test.dart';
 
@@ -475,7 +474,6 @@ void main() {
     test(
       'after recompute, should pause remove detached at the end of compute',
       () async {
-        int observationCount = 0;
         int computationCount = 0;
         final x = Observable(1, name: 'x');
         final y = Observable(2, name: 'y');
@@ -494,9 +492,7 @@ void main() {
         }, name: 'computed');
 
         fakeAsync((async) {
-          final dispose = computed.observe((change) {
-            observationCount++;
-          });
+          final dispose = computed.observe((change) {});
 
           async.elapse(Duration(milliseconds: 200));
           x.value = x.value + 1; // recompute

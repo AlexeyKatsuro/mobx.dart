@@ -39,12 +39,10 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
         futureOr = _runInZone(_asyncFn, disposer: disposer);
       } catch (error, stackTrace) {
         endAsyncComputation();
-        //_futureCompleter.completeError(error, stackTrace);
         return AsyncValue.error(error, stackTrace);
       }
       if (futureOr is! Future) {
         endAsyncComputation();
-        //_futureCompleter.complete(futureOr as T);
         return AsyncData(futureOr as T);
       }
       bool sync = true;
@@ -88,6 +86,7 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
   Future<T> get future => _computedFuture.value;
 
   void endAsyncComputation() {
+    _prevZone = null;
     _state = AsyncDerivationState.upToDate;
     _removeDetachedObservables();
   }

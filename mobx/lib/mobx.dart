@@ -46,7 +46,12 @@ export 'package:mobx/src/api/async.dart'
         FutureStatus,
         ObservableStream,
         StreamStatus,
-        AsyncAction;
+        AsyncAction,
+        AsyncValue,
+        AsyncData,
+        AsyncError,
+        AsyncLoading,
+        AsyncValueX;
 export 'package:mobx/src/api/context.dart';
 export 'package:mobx/src/api/extensions.dart';
 export 'package:mobx/src/api/observable_collections.dart'

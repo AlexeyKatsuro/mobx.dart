@@ -4,7 +4,6 @@ import 'dart:collection';
 import 'package:meta/meta.dart';
 
 import '../mobx.dart';
-import 'api/async.dart';
 import 'utils.dart';
 
 part 'core/action.dart';

@@ -14,6 +14,8 @@ import 'package:mobx_examples/settings/settings_widgets.dart';
 import 'package:mobx_examples/todos/todo_widgets.dart';
 import 'package:provider/provider.dart';
 
+import 'search/search_widgets.dart';
+
 class Example {
   Example(
       {required this.title,
@@ -98,5 +100,11 @@ final List<Example> examples = [
     description: 'A Fun Dice app.',
     path: '/dice',
     widgetBuilder: (_) => const DiceExample(),
+  ),
+  Example(
+    title: 'Search Page',
+    description: 'Search page with debounce',
+    path: '/search',
+    widgetBuilder: (_) => const SearchPageWidget(),
   ),
 ];
