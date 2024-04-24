@@ -86,6 +86,7 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
   Future<T> get future => _computedFuture.value;
 
   void endAsyncComputation() {
+    _prevZone?.disposer.close();
     _prevZone = null;
     _state = AsyncDerivationState.upToDate;
     _removeDetachedObservables();
@@ -177,6 +178,10 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
     if (self.disposer.isDisposed) {
       return #cancel as R;
     }
+    if (self.disposer.isClose) {
+      return parent.run(zone, f);
+    }
+
     return _tack(() => parent.run(zone, f), self.depth - 1);
   }
 
@@ -187,6 +192,10 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
     if (self.disposer.isDisposed) {
       return #cancel as R;
     }
+    if (self.disposer.isClose) {
+      return parent.runUnary(zone, f, a);
+    }
+
     return _tack(() => parent.runUnary(zone, f, a), self.depth - 1);
   }
 
@@ -242,5 +251,8 @@ extension on Zone {
 
 class _Disposer {
   void dispose() => isDisposed = true;
+
+  void close() => isClose = true;
   bool isDisposed = false;
+  bool isClose = false;
 }
