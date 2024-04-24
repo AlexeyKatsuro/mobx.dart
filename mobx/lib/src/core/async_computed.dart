@@ -5,12 +5,12 @@ typedef _ResultOrCancel = Object?;
 class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
     with AsyncDerivation {
   factory AsyncComputed(
-    FutureOr<T> Function() fn, {
-    String? name,
-    ReactiveContext? context,
-    EqualityComparer<AsyncValue<T>>? equals,
-    bool? keepAlive,
-  }) {
+      FutureOr<T> Function() fn, {
+        String? name,
+        ReactiveContext? context,
+        EqualityComparer<AsyncValue<T>>? equals,
+        bool? keepAlive,
+      }) {
     return AsyncComputed._(
       context ?? mainContext,
       fn,
@@ -23,11 +23,11 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
   AsyncComputed._(ReactiveContext context, this._asyncFn,
       {String? name, super.equals, super.keepAlive})
       : super._(
-          context,
-          () => throw StateError(
-              'Initial computation function must not be invoked directly.'),
-          name: name ?? context.nameFor('AsyncComputed'),
-        ) {
+    context,
+        () => throw StateError(
+        'Initial computation function must not be invoked directly.'),
+    name: name ?? context.nameFor('AsyncComputed'),
+  ) {
     _fn = () {
       AsyncValue<T>? syncValue;
       final FutureOr<_ResultOrCancel> futureOr;
@@ -47,7 +47,7 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
       }
       bool sync = true;
       futureOr.then(
-        (data) {
+            (data) {
           if (data is! T || disposer.isDisposed) return;
           if (sync) {
             syncValue = AsyncData(data);
@@ -81,11 +81,12 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
   }
 
   late final _computedFuture =
-      AsyncComputedFuture(() => value, name: 'AsyncComputedFuture.$name');
+  AsyncComputedFuture(() => value, name: 'AsyncComputedFuture.$name');
 
   Future<T> get future => _computedFuture.value;
 
   void endAsyncComputation() {
+    _prevZone?.disposer.close();
     _prevZone = null;
     _state = AsyncDerivationState.upToDate;
     _removeDetachedObservables();
@@ -101,14 +102,14 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
   void _bindDependencies() {
     final derivation = this;
     final newObservables =
-        derivation._newObservables!.difference(derivation._observables);
+    derivation._newObservables!.difference(derivation._observables);
 
     final justDetached =
-        derivation._observables.difference(derivation._newObservables!);
+    derivation._observables.difference(derivation._newObservables!);
     final previouslyDetached = derivation._detachedObservables;
 
     final detachedObservables =
-        justDetached.union(previouslyDetached.difference(newObservables));
+    justDetached.union(previouslyDetached.difference(newObservables));
 
     var lowestNewDerivationState = DerivationState.upToDate;
 
@@ -177,6 +178,10 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
     if (self.disposer.isDisposed) {
       return #cancel as R;
     }
+    if (self.disposer.isClose) {
+      return parent.run(zone, f);
+    }
+
     return _tack(() => parent.run(zone, f), self.depth - 1);
   }
 
@@ -187,6 +192,10 @@ class AsyncComputed<T> extends MutableComputed<AsyncValue<T>>
     if (self.disposer.isDisposed) {
       return #cancel as R;
     }
+    if (self.disposer.isClose) {
+      return parent.runUnary(zone, f, a);
+    }
+
     return _tack(() => parent.runUnary(zone, f, a), self.depth - 1);
   }
 
@@ -242,5 +251,8 @@ extension on Zone {
 
 class _Disposer {
   void dispose() => isDisposed = true;
+
+  void close() => isClose = true;
   bool isDisposed = false;
+  bool isClose = false;
 }
