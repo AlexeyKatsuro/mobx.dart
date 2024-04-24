@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:mobx/mobx.dart' hide when;
 import 'package:test/test.dart';
@@ -41,7 +43,7 @@ void main() {
 
     final dispose = autorun((_) {
       print('autorun');
-      print('${customerProfileProvider.value}');
+      print('${stateProvider.value}');
     });
 
     await Future.delayed(Duration(seconds: 4));
@@ -56,23 +58,30 @@ void main() {
   }, timeout: Timeout(Duration(minutes: 10)));
 }
 
+Future<void> fetch() async {
+  final client = HttpClient();
+  final request = await client.getUrl(Uri.parse(
+      'https://api.themoviedb.org/3/movie/76341?api_key=fbe54362add6e62e0e959f0e7662d64e&language=fr'));
+  final response = await request.close();
+  await utf8.decodeStream(response);
+}
 Future<ProfilesData> getProfilesData() async {
   print('1. start - getProfilesData');
-  await Future.delayed(Duration(seconds: 1));
-  print('1. end - getProfilesData');
+  await fetch();
+  print('1. end - getProfilesData ');
   return const ProfilesData();
 }
 
 Future<CustomerProfile> getCustomerProfile(String id) async {
   print('2. start - getCustomerProfile');
-  await Future.delayed(Duration(seconds: 1));
+  await fetch();
   print('2. end - getCustomerProfile');
   return CustomerProfile(id);
 }
 
 Future<ServiceProfile> getServiceProfile(String id) async {
   print('3. start - getServiceProfile');
-  await Future.delayed(Duration(seconds: 1));
+  await fetch();
   print('3. end - getServiceProfile');
   return ServiceProfile(id);
 }
@@ -98,7 +107,8 @@ class CustomerProfile {
       identical(this, other) ||
       other is CustomerProfile &&
           runtimeType == other.runtimeType &&
-          customerId == other.customerId;
+          customerId == other.customerId &&
+          name == other.name;
 
   @override
   int get hashCode => customerId.hashCode;
